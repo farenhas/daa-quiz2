@@ -52,6 +52,20 @@ def dfs(graph, start, goal):
                     stack.append((neighbor, path + [neighbor]))
     return []
 
+def bfs(graph, start, goal):
+    visited = set()
+    queue = deque([(start, [start])])
+    while queue:
+        node, path = queue.popleft()
+        if node == goal:
+            return path
+        if node not in visited:
+            visited.add(node)
+            for neighbor in sorted(graph.neighbors(node)):
+                if neighbor not in visited:
+                    queue.append((neighbor, path + [neighbor]))
+    return []
+
 def draw_graph(G, path=[]):
     edge_x, edge_y = [], []
     for edge in G.edges(data=True):
