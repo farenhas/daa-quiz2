@@ -1,4 +1,3 @@
-
 import streamlit as st
 import networkx as nx
 import plotly.graph_objects as go
@@ -89,6 +88,7 @@ def greedy(graph, start, goal):
         current = next_node
     return path
 
+
 def draw_graph(G, path=[]):
     edge_x, edge_y = [], []
     edge_text = []
@@ -101,12 +101,28 @@ def draw_graph(G, path=[]):
         edge_text.append(f"{dist_meters:.0f} m")
 
     node_x, node_y = [], []
+    icon_map = {
+        "Engineering Faculty": "🏗️",
+        "Economics Faculty": "💼",
+        "Library": "📚",
+        "Rectorate Building": "🏢",
+        "Computer Science Faculty": "💻",
+        "Campus Mosque": "🕌",
+        "Student Center": "🎓",
+        "Sports Hall": "🏀",
+        "Auditorium": "🎤",
+        "Cafeteria": "🍽️",
+    }
+
     node_labels = []
+    node_icons = []
     for node in G.nodes():
         x, y = G.nodes[node]['pos']
         node_x.append(x)
         node_y.append(y)
-        node_labels.append(G.nodes[node]['label'])
+        label = G.nodes[node]['label']
+        node_labels.append(label)  # hanya nama tanpa emoji
+        node_icons.append(icon_map.get(label, "📍"))  # icon besar saja
 
     fig = go.Figure()
 
@@ -120,20 +136,28 @@ def draw_graph(G, path=[]):
         hoverlabel=dict(bgcolor="white")
     ))
 
-    # nodes
+    # icon besar (emoji) saja sebagai node
     fig.add_trace(go.Scatter(
         x=node_x, y=node_y,
-        mode='markers+text',
+        mode='text',
+        text=node_icons,
+        textposition="middle center",
+        hoverinfo="text",
+        hovertext=node_labels,
+        hoverlabel=dict(bgcolor="lightyellow"),
+        textfont=dict(size=30),
+        showlegend=False
+    ))
+
+    # label nama bangunan (text saja, tanpa emoji), posisi agak di atas icon
+    fig.add_trace(go.Scatter(
+        x=node_x, y=[y + 0.3 for y in node_y],  # geser sedikit ke atas
+        mode='text',
         text=node_labels,
         textposition="top center",
-        marker=dict(
-            size=25,
-            color='rgb(0, 123, 255)',
-            line=dict(width=2, color='DarkBlue'),
-            symbol="circle"
-        ),
-        hoverinfo="text",
-        hoverlabel=dict(bgcolor="lightyellow")
+        hoverinfo='skip',  # biar hover tidak tabrakan dengan icon
+        textfont=dict(size=12, color='black'),
+        showlegend=False
     ))
 
     # highlight path
@@ -167,9 +191,10 @@ def draw_graph(G, path=[]):
     )
     return fig
 
+
 # === Streamlit Page Setup ===
 st.set_page_config(
-    page_title="🏫 Campus Navigator",
+    page_title=" Campus Navigator",
     page_icon="🏫",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -184,23 +209,97 @@ st.markdown("""
     @media (prefers-color-scheme: dark) {
         .stApp {
             background-color: #121212;
-            color: #eeeeee;
+            color: #f5f5f5;
         }
         .sidebar .css-1d391kg {
-            background: linear-gradient(180deg, #283593 0%, #1a237e 100%);
-            color: #fff;
+            background: linear-gradient(180deg, #2d3e50 0%, #1c2833 100%);
+            color: #ffffff;
         }
+
+        /* Tombol tetap biru di dark mode */
         .stButton > button {
-            background-color: #bb86fc;
-            color: #121212;
-            border-radius: 12px;
-            font-weight: 700;
-            transition: background-color 0.4s ease;
-            box-shadow: 0 4px 12px rgba(187, 134, 252, 0.5);
+            background-color: #0073e6 !important;
+            color: #ffffff !important;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease !important;
+            box-shadow: 0 4px 12px rgba(0, 115, 230, 0.5) !important;
+            border: none !important;
         }
+
         .stButton > button:hover {
-            background-color: #9a68f9;
-            cursor: pointer;
+            background-color: #005bbb !important;
+            box-shadow: 0 6px 16px rgba(0, 91, 187, 0.6) !important;
+            cursor: pointer !important;
+        }
+
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            font-family: 'Montserrat', sans-serif;
+            padding: 2rem 1.5rem 3rem;
+            border-right: 1px solid #444;
+            min-width: 280px;
+            background-color: #1e1e1e;
+        }
+
+        /* Sidebar headers */
+        [data-testid="stSidebar"] h2 {
+            font-weight: 700;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        /* Selectbox styling */
+        div[data-baseweb="select"] > div {
+            border-color: #3399ff !important;
+            box-shadow: 0 0 0 2px rgba(51, 153, 255, 0.4) !important;
+            background-color: #1e1e1e !important;
+            color: #ffffff !important;
+        }
+
+        /* Main Title and Subtitle */
+        .main-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 3.2rem;
+            margin-bottom: 0.1rem;
+            color: #f0f0f0;
+        }
+        .subtitle {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 500;
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            color: #bbbbbb;
+        }
+
+        /* Result card */
+        .result-card {
+            background: #1c1c1c;
+            padding: 1.8rem 2rem;
+            border-radius: 18px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            margin-bottom: 2rem;
+            font-size: 1.15rem;
+            color: #2c2c2c;
+        }
+
+        /* Route list hover */
+        .route-list-item {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            border-radius: 12px;
+            transition: background-color 0.3s ease;
+            font-weight: 600;
+            cursor: default;
+            color: #2c2c2c;
+        }
+        .route-list-item:hover {
+            background-color: #2a3b55;
+            color: #66aaff;
+            box-shadow: 0 3px 8px rgba(102, 170, 255, 0.2);
         }
     }
 
@@ -310,6 +409,7 @@ with st.container():
     st.markdown('<h1 class="main-title">🏫 Campus Navigator</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explore the campus and find your best path using graph algorithms.</p>', unsafe_allow_html=True)
 
+    route = []
     if find_route:
         if start == goal:
             st.warning("❗ Starting and destination building cannot be the same.")
@@ -340,8 +440,6 @@ with st.container():
 
             fig = draw_graph(G, path=route)
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error("❌ No route found between the selected buildings.")
 
     else:
         st.info("⬅ Please select start, destination, and algorithm, then click Find Route.")
