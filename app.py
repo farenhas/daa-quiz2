@@ -4,40 +4,37 @@ import plotly.graph_objects as go
 import math
 from collections import deque
 
-# --- Campus buildings data (coordinates in arbitrary units)
+# --- University Building Data
 nodes = {
-    "A": {"name": "Engineering Faculty", "pos": (0, 0)},
-    "B": {"name": "Economics Faculty", "pos": (2, 3)},
-    "C": {"name": "Library", "pos": (4, 1)},
-    "D": {"name": "Rectorate Building", "pos": (6, 0)},
-    "E": {"name": "Computer Science Faculty", "pos": (8, 3)},
-    "F": {"name": "Campus Mosque", "pos": (10, 0)},
-    "G": {"name": "Student Center", "pos": (5, 5)},
-    "H": {"name": "Sports Hall", "pos": (7, 6)},
-    "I": {"name": "Auditorium", "pos": (9, 5)},
-    "J": {"name": "Cafeteria", "pos": (3, 7)},
+    "A": {"name": "Faculty of Engineering", "pos": (0, 0)},
+    "B": {"name": "Faculty of Economics", "pos": (1, 2)},
+    "C": {"name": "Library", "pos": (2, 1)},
+    "D": {"name": "Rectorate Building", "pos": (3, 0)},
+    "E": {"name": "Faculty of Computer Science", "pos": (4, 2)},
+    "F": {"name": "Campus Mosque", "pos": (5, 0)},
 }
-
-UNIT_METER = 100
 
 def euclidean(a, b):
     xa, ya = a
     xb, yb = b
     return math.hypot(xa - xb, ya - yb)
 
+# Create edges if distance is under a certain threshold
 edges = []
 keys = list(nodes.keys())
 for i in range(len(keys)):
     for j in range(i + 1, len(keys)):
         d = euclidean(nodes[keys[i]]["pos"], nodes[keys[j]]["pos"])
-        if d < 5:
+        if d < 3.5:  # connection threshold
             edges.append((keys[i], keys[j], d))
 
+# --- Graph Initialization
 G = nx.Graph()
 for k, v in nodes.items():
     G.add_node(k, label=v["name"], pos=v["pos"])
 G.add_weighted_edges_from(edges)
 
+# --- DFS Algorithm
 def dfs(graph, start, goal):
     visited = set()
     stack = [(start, [start])]
@@ -52,6 +49,7 @@ def dfs(graph, start, goal):
                     stack.append((neighbor, path + [neighbor]))
     return []
 
+# --- BFS Algorithm
 def bfs(graph, start, goal):
     visited = set()
     queue = deque([(start, [start])])
@@ -66,15 +64,39 @@ def bfs(graph, start, goal):
                     queue.append((neighbor, path + [neighbor]))
     return []
 
+# --- Greedy Nearest Neighbor Algorithm
+def greedy(graph, start, goal):
+    visited = set()
+    path = [start]
+    current = start
+    while current != goal:
+        visited.add(current)
+        neighbors = list(graph.neighbors(current))
+        min_dist = float("inf")
+        next_node = None
+        for neighbor in neighbors:
+            if neighbor not in visited:
+                dist = graph[current][neighbor]['weight']
+                if dist < min_dist:
+                    min_dist = dist
+                    next_node = neighbor
+        if next_node is None:
+            return []  # cannot reach goal
+        path.append(next_node)
+        current = next_node
+    return path
+
+# --- Visualization
 def draw_graph(G, path=[]):
     edge_x, edge_y = [], []
-    for edge in G.edges(data=True):
+    for edge in G.edges():
         x0, y0 = G.nodes[edge[0]]['pos']
         x1, y1 = G.nodes[edge[1]]['pos']
         edge_x.extend([x0, x1, None])
         edge_y.extend([y0, y1, None])
 
-    node_x, node_y, node_labels = [], [], []
+    node_x, node_y = [], []
+    node_labels = []
     for node in G.nodes():
         x, y = G.nodes[node]['pos']
         node_x.append(x)
@@ -83,34 +105,16 @@ def draw_graph(G, path=[]):
 
     fig = go.Figure()
 
+    # Edges
+    fig.add_trace(go.Scatter(x=edge_x, y=edge_y, line=dict(width=1, color='gray'), mode='lines'))
+
+    # Nodes
     fig.add_trace(go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=1, color='lightgray'),
-        hoverinfo='none',
-        mode='lines'))
+        x=node_x, y=node_y, mode='markers+text',
+        text=node_labels, textposition="bottom center",
+        marker=dict(size=15, color='skyblue')))
 
-    for edge in G.edges(data=True):
-        x0, y0 = G.nodes[edge[0]]['pos']
-        x1, y1 = G.nodes[edge[1]]['pos']
-        mid_x, mid_y = (x0+x1)/2, (y0+y1)/2
-        dist_meters = edge[2]['weight'] * UNIT_METER
-        fig.add_annotation(
-            x=mid_x, y=mid_y,
-            text=f"{dist_meters:.0f} m",
-            showarrow=False,
-            font=dict(size=10, color="gray"),
-            bgcolor="white",
-            opacity=0.7,
-        )
-
-    fig.add_trace(go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        text=node_labels,
-        textposition="top center",
-        marker=dict(size=18, color='dodgerblue', line=dict(width=2, color='DarkSlateGrey'))
-    ))
-
+    # Path highlight
     if path:
         path_x, path_y = [], []
         for i in range(len(path) - 1):
@@ -118,53 +122,34 @@ def draw_graph(G, path=[]):
             x1, y1 = G.nodes[path[i+1]]['pos']
             path_x.extend([x0, x1, None])
             path_y.extend([y0, y1, None])
-        fig.add_trace(go.Scatter(
-            x=path_x, y=path_y,
-            mode='lines',
-            line=dict(width=5, color='crimson'),
-            name='Route'
-        ))
+        fig.add_trace(go.Scatter(x=path_x, y=path_y, mode='lines', line=dict(width=4, color='red')))
 
-    fig.update_layout(
-        showlegend=False,
-        margin=dict(l=20, r=20, t=40, b=20),
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        xaxis=dict(showgrid=False, zeroline=False, visible=False),
-        yaxis=dict(showgrid=False, zeroline=False, visible=False),
-        height=600,
-        title="Campus Map"
-    )
+    fig.update_layout(showlegend=False, margin=dict(l=10, r=10, t=10, b=10))
     return fig
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Campus Navigator", page_icon="🏫", layout="wide")
-
+# --- Streamlit UI
 st.title("🏫 Campus Navigator")
-st.write("Find the best route between campus buildings using Depth-First Search (DFS) algorithm.")
+st.markdown("Find the best route between buildings on campus using your selected algorithm.")
 
-with st.sidebar:
-    st.header("Route Preferences")
-    start = st.selectbox("Starting Building", list(nodes.keys()), format_func=lambda x: nodes[x]["name"])
-    goal = st.selectbox("Destination Building", list(nodes.keys()), format_func=lambda x: nodes[x]["name"])
-    btn = st.button("Find Route")
+options = list(nodes.keys())
+start = st.selectbox("Select Start Building", options, format_func=lambda x: nodes[x]["name"])
+goal = st.selectbox("Select Destination Building", options, format_func=lambda x: nodes[x]["name"])
+algo = st.selectbox("Choose Algorithm", ["DFS", "BFS", "Greedy"])
 
-if btn:
-    if start == goal:
-        st.warning("Starting building and destination cannot be the same.")
-    else:
+if st.button("🔍 Find Route"):
+    if algo == "DFS":
         route = dfs(G, start, goal)
-        if route:
-            total_m = sum(G[route[i]][route[i+1]]['weight'] * UNIT_METER for i in range(len(route)-1))
-            total_km = total_m / 1000
-            route_names = [nodes[r]["name"] for r in route]
+    elif algo == "BFS":
+        route = bfs(G, start, goal)
+    else:
+        route = greedy(G, start, goal)
 
-            st.success(f"Route found: {' → '.join(route_names)}")
-            st.info(f"Total distance: {total_m:.0f} meters ({total_km:.2f} km)")
-
-            fig = draw_graph(G, path=route)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error("No route found between the selected buildings.")
-else:
-    st.info("Use the sidebar to select your route, then click 'Find Route'.")
+    if route:
+        names = [nodes[r]["name"] for r in route]
+        total = sum(G[route[i]][route[i+1]]['weight'] for i in range(len(route)-1))
+        st.success(f"Route found: {' → '.join(names)}")
+        st.info(f"Total distance: {total:.2f} units")
+        fig = draw_graph(G, path=route)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Route not found.")
