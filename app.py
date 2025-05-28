@@ -2,10 +2,10 @@ import streamlit as st
 import networkx as nx
 import plotly.graph_objects as go
 import math
+import heapq
 from collections import deque
 import time
 
-# === Data Kampus dan Posisi Node ===
 nodes = {
     "A": {"name": "Engineering Faculty", "pos": (0, 0)},
     "B": {"name": "Economics Faculty", "pos": (2, 3)},
@@ -54,51 +54,84 @@ def dfs(graph, start, goal):
     return []
 
 def bfs(graph, start, goal):
-    visited = set()
+    visited = set([start])
     queue = deque([(start, [start])])
     while queue:
         node, path = queue.popleft()
         if node == goal:
             return path
-        if node not in visited:
-            visited.add(node)
-            for neighbor in sorted(graph.neighbors(node)):
-                if neighbor not in visited:
-                    queue.append((neighbor, path + [neighbor]))
+        for neighbor in sorted(graph.neighbors(node)):
+            if neighbor not in visited:
+                visited.add(neighbor)  
+                queue.append((neighbor, path + [neighbor]))
     return []
 
 def greedy(graph, start, goal):
-    visited = set()
-    path = [start]
-    current = start
-    while current != goal:
-        visited.add(current)
-        neighbors = list(graph.neighbors(current))
-        min_dist = float("inf")
-        next_node = None
-        for neighbor in neighbors:
-            if neighbor not in visited:
-                dist = graph[current][neighbor]['weight']
-                if dist < min_dist:
-                    min_dist = dist
-                    next_node = neighbor
-        if next_node is None:
-            return []
-        path.append(next_node)
-        current = next_node
-    return path
+    def heuristic(n):
+        x1, y1 = graph.nodes[n]['pos']
+        x2, y2 = graph.nodes[goal]['pos']
+        return math.hypot(x1 - x2, y1 - y2)
 
+    visited = set()
+    frontier = []
+    heapq.heappush(frontier, (heuristic(start), start, [start]))
+
+    while frontier:
+        h, current, path = heapq.heappop(frontier)
+
+        if current == goal:
+            return path
+
+        if current in visited:
+            continue
+
+        visited.add(current)
+
+        for neighbor in graph.neighbors(current):
+            if neighbor not in visited:
+                heapq.heappush(frontier, (heuristic(neighbor), neighbor, path + [neighbor]))
+
+    return []
 
 def draw_graph(G, path=[]):
     edge_x, edge_y = [], []
     edge_text = []
+    edge_label_x, edge_label_y = [], []
+    edge_label_text = []
+
+    path_edge_label_x, path_edge_label_y = [], []
+    path_edge_label_text = []
+
     for edge in G.edges(data=True):
         x0, y0 = G.nodes[edge[0]]['pos']
         x1, y1 = G.nodes[edge[1]]['pos']
         edge_x.extend([x0, x1, None])
         edge_y.extend([y0, y1, None])
+
         dist_meters = edge[2]['weight'] * UNIT_METER
         edge_text.append(f"{dist_meters:.0f} m")
+
+        mid_x = (x0 + x1) / 2
+        mid_y = (y0 + y1) / 2
+
+        if path and edge[0] in path and edge[1] in path:
+            is_in_path = False
+            for i in range(len(path) - 1):
+                if (path[i] == edge[0] and path[i+1] == edge[1]) or (path[i] == edge[1] and path[i+1] == edge[0]):
+                    is_in_path = True
+                    break
+            if is_in_path:
+                path_edge_label_x.append(mid_x)
+                path_edge_label_y.append(mid_y + 0.15)  
+                path_edge_label_text.append(f"{dist_meters:.0f} m")
+            else:
+                edge_label_x.append(mid_x)
+                edge_label_y.append(mid_y)
+                edge_label_text.append(f"{dist_meters:.0f} m")
+        else:
+            edge_label_x.append(mid_x)
+            edge_label_y.append(mid_y)
+            edge_label_text.append(f"{dist_meters:.0f} m")
 
     node_x, node_y = [], []
     icon_map = {
@@ -126,7 +159,7 @@ def draw_graph(G, path=[]):
 
     fig = go.Figure()
 
-    # edges
+    # edges (garis)
     fig.add_trace(go.Scatter(
         x=edge_x, y=edge_y,
         line=dict(width=1, color='#777'),
@@ -136,31 +169,16 @@ def draw_graph(G, path=[]):
         hoverlabel=dict(bgcolor="white")
     ))
 
-    # icon besar (emoji) saja sebagai node
     fig.add_trace(go.Scatter(
-        x=node_x, y=node_y,
+        x=edge_label_x,
+        y=edge_label_y,
         mode='text',
-        text=node_icons,
-        textposition="middle center",
-        hoverinfo="text",
-        hovertext=node_labels,
-        hoverlabel=dict(bgcolor="lightyellow"),
-        textfont=dict(size=30),
+        text=edge_label_text,
+        textfont=dict(color='blue', size=10),
+        hoverinfo='skip',
         showlegend=False
     ))
 
-    # label nama bangunan (text saja, tanpa emoji), posisi agak di atas icon
-    fig.add_trace(go.Scatter(
-        x=node_x, y=[y + 0.3 for y in node_y],  # geser sedikit ke atas
-        mode='text',
-        text=node_labels,
-        textposition="top center",
-        hoverinfo='skip',  # biar hover tidak tabrakan dengan icon
-        textfont=dict(size=12, color='black'),
-        showlegend=False
-    ))
-
-    # highlight path
     if path:
         path_x, path_y = [], []
         for i in range(len(path) - 1):
@@ -176,6 +194,38 @@ def draw_graph(G, path=[]):
             hoverinfo='none',
         ))
 
+        fig.add_trace(go.Scatter(
+            x=path_edge_label_x,
+            y=path_edge_label_y,
+            mode='text',
+            text=path_edge_label_text,
+            textfont=dict(color='blue', size=10),
+            hoverinfo='skip',
+            showlegend=False
+        ))
+
+    fig.add_trace(go.Scatter(
+        x=node_x, y=node_y,
+        mode='text',
+        text=node_icons,
+        textposition="middle center",
+        hoverinfo="text",
+        hovertext=node_labels,
+        hoverlabel=dict(bgcolor="lightyellow"),
+        textfont=dict(size=30),
+        showlegend=False
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=node_x, y=[y + 0.3 for y in node_y], 
+        mode='text',
+        text=node_labels,
+        textposition="top center",
+        hoverinfo='skip',
+        textfont=dict(size=12, color='black'),
+        showlegend=False
+    ))
+
     fig.update_layout(
         title="Campus Map",
         title_font_size=26,
@@ -189,6 +239,7 @@ def draw_graph(G, path=[]):
         hovermode="closest",
         height=600
     )
+
     return fig
 
 
@@ -402,7 +453,7 @@ with st.sidebar:
     st.markdown("## Select Route")
     start = st.selectbox("Start", list(nodes.keys()), format_func=lambda x: nodes[x]["name"])
     goal = st.selectbox("Destination", list(nodes.keys()), format_func=lambda x: nodes[x]["name"])
-    algo = st.selectbox("Algorithm", ["DFS", "BFS", "Greedy Nearest Neighbor"])
+    algo = st.selectbox("Algorithm", ["DFS", "BFS", "Greedy BFS"])
     find_route = st.button("Find Route")
 
 with st.container():
